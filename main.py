@@ -1,13 +1,24 @@
-import spacy
+import pandas as pd
 import string
-from spacy.lang.pt.stop_words import STOP_WORDS
+import spacy
 import en_core_web_sm
+import random
+import numpy as np
 import re
-import customtkinter as ctk
-from tkinter import *
+import spacy
+from spacy.lang.pt.stop_words import STOP_WORDS
+from spacy.training import Example
+
+base_train = pd.read_csv('Train50.csv', delimiter=';')
+
+base_train.drop(['id', 'tweet_date', 'query_used'], axis= 1, inplace=True)
+# print(base_train.head())
 
 pln = en_core_web_sm.load()
+# print(pln)
+
 stop_words = STOP_WORDS
+# print(len(stop_words))
 
 
 def preprocessamento(texto):
@@ -38,48 +49,39 @@ def preprocessamento(texto):
     return lista
 
 
-def margim(largura):
-    margem = ctk.CTkCanvas(highlightthickness=0, height=largura, background='#242424')
-    margem.pack()
+base_train['tweet_text'] = base_train['tweet_text'].apply(preprocessamento)
+
+base_train_final = []
+
+for texto, emocao in zip(base_train['tweet_text'], base_train['sentiment']):
+    if emocao == 1:
+        dic = {'POSITIVO': True, 'NEGATIVO': False}
+    elif emocao == 0:
+        dic = {'POSITIVO': False, 'NEGATIVO': True}
+
+    base_train_final.append([texto, dic.copy()])
+
+modelo = spacy.blank('pt')
+categorias = modelo.add_pipe("textcat")
+categorias.add_label("POSITIVO")
+categorias.add_label("NEGATIVO")
+historico = []
+
+modelo.begin_training()
+for epoca in range(5):
+    random.shuffle(base_train_final)
+    losses = {}
+    for batch in spacy.util.minibatch(base_train_final, 512):
+        textos = [modelo(texto) for texto, entities in batch]
+        annotations = [{'cats': entities} for texto, entities in batch]
+        examples = [Example.from_dict(doc, annotation) for doc, annotation in zip(
+            textos, annotations
+        )]
+        modelo.update(examples, losses=losses)
+        historico.append(losses)
+
+    if epoca % 5 == 0:
+        print(losses)
 
 
-def classifica():
-    modelo = spacy.load('modelo')
-
-    frase = text.get()
-    frase = preprocessamento(frase)
-
-    previsao = modelo(frase).cats
-    if previsao['POSITIVO'] > previsao['NEGATIVO']:
-        result.configure(text='A frase foi classificada Positiva!')
-    else:
-        result.configure(text='A frase foi classificada Negativa!')
-
-
-root = ctk.CTk()
-root.title('Classificador de Frase')
-root.geometry('500x300')
-root.minsize(500, 300)
-root.maxsize(500, 300)
-
-margim(40)
-title = ctk.CTkLabel(root, text='Classificador de frase Positivo ou Negativo', font=('Montserrat', 20, 'bold'),
-                     text_color='#FFF')
-title.pack()
-
-margim(15)
-text = ctk.CTkEntry(root, placeholder_text='Digite a frase para ser classificada', fg_color='transparent',
-                    placeholder_text_color='#FFF', width=300, font=('Montserrat', 13, 'bold'), justify=CENTER)
-text.pack()
-
-margim(15)
-button = ctk.CTkButton(root, text='Classificar', font=('Montserrat', 18, 'bold'), text_color='#FFF', command=classifica)
-button.pack()
-
-margim(20)
-result = ctk.CTkLabel(root, text='', font=('Montserrat', 20, 'bold'), text_color='#FFF')
-result.pack()
-root.mainloop()
-
-
-
+modelo.to_disk('modelo')
