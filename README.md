@@ -22,7 +22,7 @@ pip install -U spacy
 python -m spacy download pt_core_news_sm
 
 4. Clone este repositório:<br>
-git clone https://github.com/Samuel-Gaudencio/classificador_sentimentos
+git clone https://github.com/Samuel-Gaudencio/classificador_sentimentos.git
 
 5. Navegue até o diretório do projeto:<br>
 cd classificador-de-frases
